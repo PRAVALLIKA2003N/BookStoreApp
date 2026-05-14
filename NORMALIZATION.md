@@ -1,4 +1,4 @@
-# Normalization Report — Bookstore Database
+Adding # Normalization Report — Bookstore Database
 
 ## Overview
 
@@ -8,7 +8,7 @@ This document audits the original bookstore database schema (Users, Books, Order
 
 ## 1. Original Schema
 
-The starting schema (from the DDL in `Database.docx`) was:
+The starting schema (from the DDL in `Database.docx`)
 
 ```
 Users(user_id, name, email, created_at, updated_at, status)
