@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <i class="bi bi-cart3 fs-2 text-warning"></i>
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Orders</h1>
+      <p class="text-muted mb-0 small">{{ orders|length }} total order{{ 's' if orders|length != 1 }}</p>
+    </div>
+  </div>
+  <a href="{{ url_for('orders_new') }}" class="btn btn-warning">
+    <i class="bi bi-plus-circle me-1"></i>New Order
+  </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Order #</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in orders %}
+          <tr>
+            <td class="fw-bold">#{{ o.order_id }}</td>
+            <td>
+              <a href="{{ url_for('users_detail', uid=o.user_id) }}" class="text-decoration-none">
+                <i class="bi bi-person-circle text-muted me-1"></i>{{ o.user.name }}
+              </a>
+            </td>
+            <td class="text-muted small">{{ o.order_date }}</td>
+            <td>
+              <span class="badge status-badge-{{ o.status }}">{{ o.status }}</span>
+            </td>
+            <td>
+              <span class="badge bg-secondary rounded-pill">{{ o.items|length }}</span>
+            </td>
+            <td class="fw-semibold">
+              ${{ "%.2f"|format(o.items|sum(attribute='total_price')) }}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('orders_detail', oid=o.order_id) }}" class="btn btn-sm btn-outline-secondary me-1" title="View">
+                <i class="bi bi-eye"></i>
+              </a>
+              <form action="{{ url_for('orders_delete', oid=o.order_id) }}" method="POST" class="d-inline confirm-delete">
+                <button class="btn btn-sm btn-outline-danger" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+              <i class="bi bi-inbox fs-3 d-block mb-2"></i>No orders yet.
+              <a href="{{ url_for('orders_new') }}">Create the first one.</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

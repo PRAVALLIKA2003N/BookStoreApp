@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Books{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <i class="bi bi-book-fill fs-2 text-success"></i>
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Book Catalog</h1>
+      <p class="text-muted mb-0 small">{{ books|length }} book{{ 's' if books|length != 1 }} in inventory</p>
+    </div>
+  </div>
+  <a href="{{ url_for('books_new') }}" class="btn btn-success">
+    <i class="bi bi-plus-circle me-1"></i>Add Book
+  </a>
+</div>
+
+<div class="row g-4">
+  {% for book in books %}
+  <div class="col-sm-6 col-xl-4">
+    <div class="card book-card border-0 shadow-sm h-100">
+      <div class="card-body d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <span class="badge status-badge-{{ book.status }}">{{ book.status }}</span>
+          <span class="text-muted small">#{{ book.book_id }}</span>
+        </div>
+        <h5 class="card-title fw-bold mb-1">{{ book.title }}</h5>
+        <p class="text-muted small mb-2"><i class="bi bi-person me-1"></i>{{ book.author }}</p>
+        <div class="mt-auto">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="fs-4 fw-bold text-success">${{ "%.2f"|format(book.price) }}</span>
+            {% if book.published_date %}
+            <span class="text-muted small"><i class="bi bi-calendar me-1"></i>{{ book.published_date.year }}</span>
+            {% endif %}
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('books_edit', bid=book.book_id) }}" class="btn btn-outline-primary btn-sm flex-fill">
+              <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+            <form action="{{ url_for('books_delete', bid=book.book_id) }}" method="POST" class="flex-fill confirm-delete">
+              <button class="btn btn-outline-danger btn-sm w-100">
+                <i class="bi bi-trash me-1"></i>Delete
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-center py-5 text-muted">
+    <i class="bi bi-journal-x fs-1 d-block mb-2"></i>
+    No books in catalog. <a href="{{ url_for('books_new') }}">Add the first one.</a>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
