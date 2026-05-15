@@ -1,241 +1,252 @@
-Adding # Normalization Report — Bookstore Database
+# NORMALIZATION.md — Bookstore Database Normalization Report
 
 ## Overview
 
-This document audits the original bookstore database schema (Users, Books, Orders, Order_Items) and reduces it to **Third Normal Form (3NF)**. It covers original functional dependencies, anomaly identification, decomposition steps, and the final relational schema.
+This report documents the normalization process applied to the Bookstore database (Users, Books, Orders, Order_items)**3rd Normal Form (3NF)** schema.
 
 ---
 
-## 1. Original Schema
+## 1. Original Schema (Starting Point)
 
-The starting schema (from the DDL in `Database.docx`)
+The database was designed with four tables:
 
 ```
 Users(user_id, name, email, created_at, updated_at, status)
 Books(book_id, title, price, published_date, created_at, status)
 Orders(order_id, user_id, order_date, created_at, status)
-Order_Items(item_id, order_id, book_id, quantity, created_at, status, total_price)
+Order_items(item_id, order_id, book_id, quantity, created_at, status, total_price)
 ```
-
-> **Note:** `total_price` was added via `ALTER TABLE` in the original DML as a derived column (`quantity * price`).
 
 ---
 
 ## 2. Original Functional Dependencies
 
-### Users Table
+### Users
 | Determinant | Dependent Attributes |
 |---|---|
 | user_id → | name, email, created_at, updated_at, status |
-| email → | user_id, name, created_at, updated_at, status (email is unique) |
+| email → | user_id, name, created_at, updated_at, status *(email is a candidate key)* |
 
-### Books Table
+### Books
 | Determinant | Dependent Attributes |
 |---|---|
 | book_id → | title, price, published_date, created_at, status |
 
-### Orders Table
+### Orders
 | Determinant | Dependent Attributes |
 |---|---|
 | order_id → | user_id, order_date, created_at, status |
-| user_id → | (partial — user attributes live in Users table) |
+| user_id → | *(partial — user info lives in Users table)* |
 
-### Order_Items Table
+### Order_items
 | Determinant | Dependent Attributes |
 |---|---|
 | item_id → | order_id, book_id, quantity, created_at, status, total_price |
-| (order_id, book_id) → | quantity, total_price (composite candidate key) |
-| book_id → | price (transitive — price lives in Books, but total_price depends on it) |
-| total_price → | quantity × price (derived/computed, not independently determined) |
+| (order_id, book_id) → | quantity, total_price *(composite candidate key)* |
+| book_id → | price *(transitive — price lives in Books, but total_price = quantity × price is derived here)* |
 
 ---
 
-## 3. Normal Form Analysis
+## 3. First Normal Form (1NF) Check
 
-### First Normal Form (1NF)
-**All tables satisfy 1NF.**
-- Every column holds atomic (single) values.
-- Each row is uniquely identified by a primary key.
-- No repeating groups or arrays exist.
+**Definition:** All attributes must be atomic (no repeating groups, no multi-valued columns).
 
-✅ Users — atomic columns, PK = user_id  
-✅ Books — atomic columns, PK = book_id  
-✅ Orders — atomic columns, PK = order_id  
-✅ Order_Items — atomic columns, PK = item_id  
-
----
-
-### Second Normal Form (2NF)
-**2NF requires 1NF + no partial dependencies (every non-key attribute must depend on the *whole* primary key).**
-
-Since `Users`, `Books`, and `Orders` all have **single-column** primary keys, partial dependencies are impossible in those tables — they automatically satisfy 2NF.
-
-For `Order_Items`, the natural composite key is `(order_id, book_id)`, but the table uses a surrogate `item_id` as PK. Under `item_id` as PK, all columns are fully dependent on `item_id`, so no partial dependency exists formally. However:
-
-- `total_price` is derived from `quantity × Books.price` — this is a **derived attribute**, which is a 2NF/3NF concern addressed below.
-
-✅ All tables satisfy 2NF.
-
----
-
-### Third Normal Form (3NF)
-**3NF requires 2NF + no transitive dependencies (no non-key attribute depends on another non-key attribute).**
-
-#### Violation Found: `Order_Items.total_price`
-
-`total_price` is computed as `quantity × price`, where `price` comes from the `Books` table.
-
-- `total_price` depends on `quantity` (non-key) and `book_id → price` (via Books).
-- This is a **transitive dependency**: `item_id → book_id → price → total_price`.
-- Storing `total_price` also introduces **redundancy**: if a book's price changes, every `Order_Item` row referencing that book needs updating — an **update anomaly**.
-
-**Resolution:** Remove `total_price` from `Order_Items`. Compute it on-the-fly in application queries using `quantity * Books.price`.
-
-#### Other Observations
-
-| Table | Potential Issue | Assessment |
+| Table | 1NF Status | Notes |
 |---|---|---|
-| Users | `updated_at` is metadata, not derived | ✅ Fine — it records the last modification timestamp |
-| Books | `created_at` + `status` are independent | ✅ Fine — no transitive dependency |
-| Orders | `status` is independent of `user_id` | ✅ Fine |
-| Order_Items | `total_price = quantity × price` | ❌ **Transitive/derived — remove** |
+| Users | ✅ Pass | All columns are atomic single values |
+| Books | ✅ Pass | All columns are atomic single values |
+| Orders | ✅ Pass | All columns are atomic single values |
+| Order_items | ✅ Pass | All columns are atomic; each row represents one item |
+
+**Result: All tables already satisfy 1NF.** No restructuring required at this stage.
 
 ---
 
-## 4. Anomaly Identification
+## 4. Second Normal Form (2NF) Check
+
+**Definition:** Must be in 1NF AND every non-key attribute must be **fully functionally dependent** on the *entire* primary key (no partial dependencies). Partial dependencies only arise when the primary key is composite.
+
+### Tables with single-column primary keys (Users, Books, Orders)
+No partial dependencies are possible. ✅ Pass automatically.
+
+### Order_items — Composite Candidate Key Analysis
+
+`Order_items` has `item_id` as the surrogate PK. However, `(order_id, book_id)` is a natural composite candidate key.
+
+| Non-key Attribute | Depends on full (order_id, book_id)? | Issue? |
+|---|---|---|
+| quantity | ✅ Yes — quantity per specific order+book | None |
+| total_price | ⚠️ Partially derived from book_id → price | Derived value |
+| created_at | ✅ Yes — timestamp of this line item | None |
+| status | ✅ Yes — status of this line item | None |
+
+**`total_price` is a computed/derived column** (`quantity × Books.price`). It does not represent a true partial dependency but is a **derived attribute** that could cause **update anomalies** (if a book's price changes, existing `total_price` values become stale).
+
+**2NF Resolution:** `total_price` should be treated as a **calculated virtual value**, not a stored column. It will be computed via application logic or a SQL view. We remove it from the base table to eliminate the anomaly.
+
+**Result: All tables satisfy 2NF** after removing the derived `total_price` column from `Order_items`.
+
+---
+
+## 5. Third Normal Form (3NF) Check
+
+**Definition:** Must be in 2NF AND every non-key attribute must depend **directly on the primary key** — no transitive dependencies (non-key → non-key → PK).
+
+### Users
+| Dependency Chain | Transitive? |
+|---|---|
+| user_id → name | ✅ Direct |
+| user_id → email | ✅ Direct |
+| user_id → created_at | ✅ Direct |
+| user_id → updated_at | ✅ Direct |
+| user_id → status | ✅ Direct |
+
+No transitive dependencies. ✅ **Users is in 3NF.**
+
+### Books
+| Dependency Chain | Transitive? |
+|---|---|
+| book_id → title | ✅ Direct |
+| book_id → price | ✅ Direct |
+| book_id → published_date | ✅ Direct |
+| book_id → created_at | ✅ Direct |
+| book_id → status | ✅ Direct |
+
+No transitive dependencies. ✅ **Books is in 3NF.**
+
+### Orders
+| Dependency Chain | Transitive? |
+|---|---|
+| order_id → user_id | ✅ Direct (FK reference) |
+| order_id → order_date | ✅ Direct |
+| order_id → created_at | ✅ Direct |
+| order_id → status | ✅ Direct |
+
+No transitive dependencies. ✅ **Orders is in 3NF.**
+
+### Order_items
+| Dependency Chain | Transitive? |
+|---|---|
+| item_id → order_id | ✅ Direct (FK reference) |
+| item_id → book_id | ✅ Direct (FK reference) |
+| item_id → quantity | ✅ Direct |
+| item_id → created_at | ✅ Direct |
+| item_id → status | ✅ Direct |
+|item_id → total_price | ❌ Removed (derived from book_id → price) |
+
+After removing `total_price`, no transitive dependencies remain. ✅ **Order_items is in 3NF.**
+
+---
+
+## 6. Anomaly Identification
 
 ### Update Anomaly
-- **Problem:** If `Books.price` changes (e.g., a sale), all existing `Order_Items.total_price` values become stale and incorrect.
-- **Impact:** Every row in `Order_Items` referencing that book must be manually updated.
-- **Fix:** Remove `total_price`; compute dynamically via JOIN.
+**Problem:** `total_price` was stored directly in `Order_items`. If the price of a book in the `Books` table is updated, all previously calculated `total_price` values in `Order_items` become incorrect without a manual cascading update.
+
+Remove `total_price` as a stored column. Compute it dynamically: `quantity * Books.price` via a JOIN query or a database VIEW.
 
 ### Insertion Anomaly
-- **Problem:** A new `Order_Item` cannot have `total_price` set correctly until `Books.price` is known, creating a chicken-and-egg dependency.
-- **Fix:** Removing the derived column eliminates this issue entirely.
+**Problem (hypothetical):** If a user's information (e.g., address or status) were embedded directly in `Orders` instead of referenced by FK, you could not record an order without duplicating user data, or insert user data without an associated order.
+
+User data is properly separated into the `Users` table and referenced via `user_id` foreign key in `Orders`. ✅
 
 ### Deletion Anomaly
-- **Problem:** Deleting a Book that is referenced by Order_Items would cascade and lose historical order data (or be blocked by FK constraints).
-- **Fix:** The FK constraint already handles this; no schema change needed beyond the derived column removal.
+**Problem (hypothetical):** If book details (title, price) were stored directly in `Order_items` instead of referenced by FK, deleting all order items for a book would destroy the book's data entirely.
+
+ Book data is properly separated into the `Books` table and referenced via `book_id` FK in `Order_items`. ✅
 
 ---
 
-## 5. Decomposition Steps
+## 7. Decomposition Steps
 
-### Step 1 — Identify the violation
+### Step 1 — Remove derived column from Order_items
 
-`Order_Items.total_price` is a derived attribute:
-```
-total_price = quantity × price   (price from Books table)
-```
-This creates a transitive dependency: `item_id → book_id → price → total_price`.
-
-### Step 2 — Remove the derived attribute
-
-**Before (violates 3NF):**
+**Before:**
 ```sql
-CREATE TABLE Order_Items (
-    item_id      INT PRIMARY KEY,
-    order_id     INT,
-    book_id      INT,
-    quantity     INT,
-    created_at   DATE,
-    status       VARCHAR(50),
-    total_price  DECIMAL(10,2),   -- ← DERIVED, violates 3NF
-    FOREIGN KEY (order_id) REFERENCES Orders(order_id),
-    FOREIGN KEY (book_id) REFERENCES Books(book_id)
-);
+Order_items(item_id, order_id, book_id, quantity, created_at, status, total_price)
 ```
 
-**After (3NF compliant):**
+**After:**
 ```sql
-CREATE TABLE Order_Items (
-    item_id    INT PRIMARY KEY,
-    order_id   INT NOT NULL,
-    book_id    INT NOT NULL,
-    quantity   INT NOT NULL CHECK (quantity > 0),
-    created_at DATE DEFAULT (CURRENT_DATE),
-    status     VARCHAR(50) DEFAULT 'ok',
-    FOREIGN KEY (order_id) REFERENCES Orders(order_id),
-    FOREIGN KEY (book_id)  REFERENCES Books(book_id)
-);
+Order_items(item_id, order_id, book_id, quantity, created_at, status)
 ```
 
-`total_price` is now computed in SQL as:
+`total_price` is now computed on-the-fly via SQL:
 ```sql
 SELECT oi.item_id, oi.quantity, b.price, (oi.quantity * b.price) AS total_price
-FROM Order_Items oi
+FROM Order_items oi
 JOIN Books b ON oi.book_id = b.book_id;
 ```
 
-### Step 3 — Verify remaining tables
+### Step 2 — Verify all foreign key constraints are explicit
 
-No further decomposition is needed. All other attributes in Users, Books, and Orders depend solely and directly on their respective primary keys.
+All relationships are enforced with explicit FK constraints in the schema to ensure referential integrity (no orphan orders or order items).
+
+No further decomposition was required — the original design was already well-structured with proper table separation.
 
 ---
 
-## 6. Final Relational Schema (3NF)
+## 8. Final Relational Schema (3NF)
+
+This is the schema the Python Flask application uses:
 
 ```
-Users(
-    user_id    INT          PK,
-    name       VARCHAR(100) NOT NULL,
-    email      VARCHAR(100) NOT NULL UNIQUE,
-    created_at DATE,
-    updated_at DATE,
-    status     VARCHAR(50)  DEFAULT 'active'
-)
+Users
+------
+user_id     INT          PRIMARY KEY
+name        VARCHAR(100) NOT NULL
+email       VARCHAR(100) NOT NULL UNIQUE
+created_at  DATE         NOT NULL
+updated_at  DATE
+status      VARCHAR(50)  DEFAULT 'active'
 
-Books(
-    book_id        INT            PK,
-    title          VARCHAR(200)   NOT NULL,
-    author         VARCHAR(150),
-    price          DECIMAL(10,2)  NOT NULL CHECK (price >= 0),
-    published_date DATE,
-    created_at     DATE,
-    status         VARCHAR(50)    DEFAULT 'available'
-)
+Books
+------
+book_id         INT           PRIMARY KEY
+title           VARCHAR(100)  NOT NULL
+price           DECIMAL(10,2) NOT NULL CHECK (price >= 0)
+published_date  DATE
+created_at      DATE          NOT NULL
+status          VARCHAR(50)   DEFAULT 'available'
 
-Orders(
-    order_id   INT         PK,
-    user_id    INT         NOT NULL  FK → Users(user_id),
-    order_date DATE,
-    created_at DATE,
-    status     VARCHAR(50) DEFAULT 'pending'
-)
+Orders
+------
+order_id    INT         PRIMARY KEY
+user_id     INT         NOT NULL  REFERENCES Users(user_id)
+order_date  DATE        NOT NULL
+created_at  DATE        NOT NULL
+status      VARCHAR(50) DEFAULT 'pending'
 
-Order_Items(
-    item_id    INT          PK,
-    order_id   INT NOT NULL FK → Orders(order_id),
-    book_id    INT NOT NULL FK → Books(book_id),
-    quantity   INT NOT NULL CHECK (quantity > 0),
-    created_at DATE,
-    status     VARCHAR(50)  DEFAULT 'ok'
-    -- total_price REMOVED: computed as quantity * Books.price
-)
+Order_items
+------
+item_id     INT          PRIMARY KEY
+order_id    INT          NOT NULL  REFERENCES Orders(order_id)
+book_id     INT          NOT NULL  REFERENCES Books(book_id)
+quantity    INT          NOT NULL  CHECK (quantity > 0)
+created_at  DATE         NOT NULL
+status      VARCHAR(50)  DEFAULT 'ok'
+-- total_price is COMPUTED: quantity * Books.price (NOT stored)
 ```
 
 ### Entity-Relationship Summary
 
 ```
-Users ──< Orders ──< Order_Items >── Books
- (1)      (many)      (many)          (1)
+Users ──< Orders ──< Order_items >── Books
+(1)       (Many)     (Many)           (1)
 ```
 
-- **Users → Orders:** One-to-Many (a user can place many orders)
-- **Orders → Order_Items:** One-to-Many (an order can contain many items)
-- **Books → Order_Items:** One-to-Many (a book can appear in many order items)
+- **Users → Orders:** One-to-Many (one user can place many orders)
+- **Orders → Order_items:** One-to-Many (one order can contain many line items)
+- **Books → Order_items:** One-to-Many (one book can appear in many order items)
+- **Orders ↔ Books via Order_items:** Many-to-Many (resolved through junction table)
 
 ---
 
-## 7. Summary of Changes
+## 9. Summary
 
-| Change | Reason |
-|---|---|
-| Removed `Order_Items.total_price` | Derived column — transitive dependency violates 3NF |
-| Added `CHECK (price >= 0)` on Books | Data integrity — prevents negative prices |
-| Added `CHECK (quantity > 0)` on Order_Items | Data integrity — quantity must be positive |
-| Added `NOT NULL` constraints | Enforce required fields |
-| Added `UNIQUE` on `Users.email` | Already in DML; formalized in DDL |
-| Added `author` column to Books | Practical field missing from original schema |
+| Normal Form | Status | Action Taken |
+|---|---|---|
+| 1NF | ✅ Already satisfied | No changes needed |
+| 2NF | ✅ Achieved | Removed derived `total_price` column |
+| 3NF | ✅ Achieved | Confirmed no transitive dependencies remain |
 
-All four tables now satisfy **First, Second, and Third Normal Form**.
