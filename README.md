@@ -143,23 +143,4 @@ bookstore_app/
         └── detail.html
 ```
 
----
 
-## Git Commit History Guidance
-
-Maintain at least 5 incremental commits, for example:
-
-1. `init: project structure and Flask app skeleton`
-2. `feat: add SQLAlchemy models and database schema`
-3. `feat: implement Users CRUD with validation`
-4. `feat: implement Books CRUD`
-5. `feat: implement Orders with transaction logic`
-6. `feat: dashboard with aggregate SQL queries`
-7. `style: Bootstrap 5 templates and custom CSS`
-8. `docs: add NORMALIZATION.md, README, AI_LOG`
-
----
-
-## License
-
-Academic project — CS665, 2024.
